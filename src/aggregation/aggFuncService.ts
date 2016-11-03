@@ -140,15 +140,16 @@ function aggCount(input: any[]): any {
     var result = {
         value: 0,
         toString: function() {
-            return this.value;
+            return this.value.toString();
         }
     };
     var length = input.length;
     for (var i = 0; i<length; i++) {
-        if (typeof input[i] === 'number') {
-            result.value++;
-        } else if (typeof input[i].value === 'number') {
+        let isGroupAgg = Utils.exists(input[i]) && typeof input[i].value === 'number';
+        if (isGroupAgg) {
             result += input[i].value;
+        } else {
+            result.value++;
         }
     }
     return result;
@@ -167,12 +168,14 @@ function aggAvg(input: any[]): any {
 
         var currentItem = input[i];
 
+        var itemIsGroupResult = Utils.exists(currentItem) && typeof currentItem.value === 'number' && typeof currentItem.count === 'number';
+
         // skip values that are not numbers (ie skip empty values)
         if (typeof currentItem === 'number') {
             sum += currentItem;
             count++;
         // check if it's a group (ie value is a wrapper object)
-        } else if (typeof currentItem.value === 'number' && typeof currentItem.count === 'number') {
+        } else if (itemIsGroupResult) {
             // we are aggregating groups, so we take the
             // aggregated values to calculated a weighted average
             sum += currentItem.value * currentItem.count;
@@ -195,7 +198,11 @@ function aggAvg(input: any[]): any {
         // the grid by default uses toString to render values for an object, so this
         // is a trick to get the default cellRenderer to display the avg value
         toString: function() {
-            return this.value;
+            if (typeof this.value === 'number') {
+                return this.value.toString();
+            } else {
+                return '';
+            }
         }
     };
 

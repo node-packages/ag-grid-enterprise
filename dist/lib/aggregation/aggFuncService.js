@@ -1,4 +1,4 @@
-// ag-grid-enterprise v5.2.0
+// ag-grid-enterprise v6.2.1
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -152,16 +152,17 @@ function aggCount(input) {
     var result = {
         value: 0,
         toString: function () {
-            return this.value;
+            return this.value.toString();
         }
     };
     var length = input.length;
     for (var i = 0; i < length; i++) {
-        if (typeof input[i] === 'number') {
-            result.value++;
-        }
-        else if (typeof input[i].value === 'number') {
+        var isGroupAgg = main_1.Utils.exists(input[i]) && typeof input[i].value === 'number';
+        if (isGroupAgg) {
             result += input[i].value;
+        }
+        else {
+            result.value++;
         }
     }
     return result;
@@ -175,12 +176,13 @@ function aggAvg(input) {
     var length = input.length;
     for (var i = 0; i < length; i++) {
         var currentItem = input[i];
+        var itemIsGroupResult = main_1.Utils.exists(currentItem) && typeof currentItem.value === 'number' && typeof currentItem.count === 'number';
         // skip values that are not numbers (ie skip empty values)
         if (typeof currentItem === 'number') {
             sum += currentItem;
             count++;
         }
-        else if (typeof currentItem.value === 'number' && typeof currentItem.count === 'number') {
+        else if (itemIsGroupResult) {
             // we are aggregating groups, so we take the
             // aggregated values to calculated a weighted average
             sum += currentItem.value * currentItem.count;
@@ -201,7 +203,12 @@ function aggAvg(input) {
         // the grid by default uses toString to render values for an object, so this
         // is a trick to get the default cellRenderer to display the avg value
         toString: function () {
-            return this.value;
+            if (typeof this.value === 'number') {
+                return this.value.toString();
+            }
+            else {
+                return '';
+            }
         }
     };
     return result;

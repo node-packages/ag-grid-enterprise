@@ -1,12 +1,14 @@
 import {
     PopupService,
     Utils,
+    DragSourceType,
     Component,
     Autowired,
     ColumnController,
     Events,
     Context,
     EventService,
+    TouchListener,
     DragAndDropService,
     GridPanel,
     GridOptionsWrapper,
@@ -59,7 +61,7 @@ export class ColumnComponent extends Component {
 
     @PostConstruct
     public init(): void {
-        this.displayName = this.columnController.getDisplayNameForCol(this.column);
+        this.displayName = this.columnController.getDisplayNameForColumn(this.column);
         this.setupComponents();
         if (!this.ghost && !this.gridOptionsWrapper.isFunctionsReadOnly()) {
             this.addDragSource();
@@ -68,23 +70,21 @@ export class ColumnComponent extends Component {
 
     private addDragSource(): void {
         var dragSource: DragSource = {
-            eElement: this.getGui(),
+            type: DragSourceType.ToolPanel,
+            eElement: this.eText,
             dragItem: [this.column],
             dragItemName: this.displayName,
             dragSourceDropTarget: this.dragSourceDropTarget
         };
-        this.dragAndDropService.addDragSource(dragSource);
+        this.dragAndDropService.addDragSource(dragSource, true);
+        this.addDestroyFunc( ()=> this.dragAndDropService.removeDragSource(dragSource) );
     }
 
     private setupComponents(): void {
 
         this.setTextValue();
-        this.addDestroyableEventListener(this.btRemove, 'click', (event: MouseEvent)=> {
-            this.dispatchEvent(ColumnComponent.EVENT_COLUMN_REMOVE);
-            event.stopPropagation();
-        });
 
-        Utils.setVisible(this.btRemove, !this.gridOptionsWrapper.isFunctionsReadOnly());
+        this.setupRemove();
 
         if (this.ghost) {
             Utils.addCssClass(this.getGui(), 'ag-column-drop-cell-ghost');
@@ -93,6 +93,22 @@ export class ColumnComponent extends Component {
         if (this.valueColumn && !this.gridOptionsWrapper.isFunctionsReadOnly()) {
             this.addGuiEventListener('click', this.onShowAggFuncSelection.bind(this) );
         }
+    }
+
+    private setupRemove(): void {
+
+        Utils.setVisible(this.btRemove, !this.gridOptionsWrapper.isFunctionsReadOnly());
+
+        this.addDestroyableEventListener(this.btRemove, 'click', (event: MouseEvent)=> {
+            this.dispatchEvent(ColumnComponent.EVENT_COLUMN_REMOVE);
+            event.stopPropagation();
+        });
+
+        let touchListener = new TouchListener(this.btRemove);
+        this.addDestroyableEventListener(touchListener, TouchListener.EVENT_TAP, ()=> {
+            this.dispatchEvent(ColumnComponent.EVENT_COLUMN_REMOVE);
+        });
+        this.addDestroyFunc(touchListener.destroy.bind(touchListener));
     }
 
     private setTextValue(): void {

@@ -37,7 +37,7 @@ export class ContextMenuFactory implements IContextMenuFactory {
         var defaultMenuOptions: string[];
         if (Utils.exists(node)) {
             // if user clicks a cell
-            defaultMenuOptions = ['copy','paste','separator','toolPanel'];
+            defaultMenuOptions = ['copy','copyWithHeaders','paste','separator','toolPanel'];
         } else {
             // if user clicks outside of a cell (eg below the rows, or not rows present)
             defaultMenuOptions = ['toolPanel'];
@@ -63,6 +63,8 @@ export class ContextMenuFactory implements IContextMenuFactory {
     public showMenu(node: RowNode, column: Column, value: any, mouseEvent: MouseEvent): void {
 
         var menuItems = this.getMenuItems(node, column, value);
+
+        if (Utils.missingOrEmpty(menuItems)) { return; }
 
         var menu = new ContextMenu(menuItems);
         this.context.wireBean(menu);
@@ -113,7 +115,13 @@ class ContextMenu extends Component {
                 name: localeTextFunc('copy','Copy'),
                 shortcut: localeTextFunc('ctrlC','Ctrl+C'),
                 icon: svgFactory.createCopyIcon(),
-                action: ()=> this.clipboardService.copyToClipboard()
+                action: ()=> this.clipboardService.copyToClipboard(false)
+            },
+            copyWithHeaders: {
+                name: localeTextFunc('copyWithHeaders','Copy with Headers'),
+                // shortcut: localeTextFunc('ctrlC','Ctrl+C'),
+                icon: svgFactory.createCopyIcon(),
+                action: ()=> this.clipboardService.copyToClipboard(true)
             },
             paste: {
                 name: localeTextFunc('paste','Paste'),

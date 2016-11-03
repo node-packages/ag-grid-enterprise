@@ -1,8 +1,11 @@
 
 import {
     Bean,
+    CsvExportParams,
+    ColDef,
     IClipboardService,
     Autowired,
+    ProcessCellForExportParams,
     CsvCreator,
     LoggerFactory,
     SelectionController,
@@ -27,6 +30,14 @@ import {
     Constants
 } from "ag-grid/main";
 import {RangeController} from "./rangeController";
+
+interface RowCallback {
+    (gridRow: GridRow, rowNode: RowNode, columns: Column[]): void
+}
+
+interface ColumnCallback {
+    (columns: Column[]): void
+}
 
 @Bean('clipboardService')
 export class ClipboardService implements IClipboardService {
@@ -75,7 +86,7 @@ export class ClipboardService implements IClipboardService {
         var updatedRowNodes: RowNode[] = [];
         var updatedColumnIds: string[] = [];
 
-        this.forEachRangeRow( (currentRow: GridRow, rowNode: RowNode, columns: Column[]) => {
+        this.iterateFirstActiveRange( (currentRow: GridRow, rowNode: RowNode, columns: Column[]) => {
             // take reference of first row, this is the one we will be using to copy from
             if (!firstRowValues) {
                 firstRowValues = [];
@@ -142,11 +153,14 @@ export class ClipboardService implements IClipboardService {
             values.forEach( (value: any)=> {
                 if (Utils.missing(column)) { return; }
                 if (!column.isCellEditable(rowNode)) { return; }
-                this.valueService.setValue(rowNode, column, value);
+
+                let processedValue = this.processRangeCell(rowNode, column, value, this.gridOptionsWrapper.getProcessCellFromClipboardFunc());
+
+                this.valueService.setValue(rowNode, column, processedValue);
                 var cellId = new GridCell(currentRow.rowIndex, currentRow.floating, column).createId();
                 cellsToFlash[cellId] = true;
 
-                if (index === 0) {
+                if (updatedColumnIds.indexOf(column.getId()) < 0) {
                     updatedColumnIds.push(column.getId());
                 }
 
@@ -164,23 +178,23 @@ export class ClipboardService implements IClipboardService {
         this.focusedCellController.setFocusedCell(focusedCell.rowIndex, focusedCell.column, focusedCell.floating, true);
     }
 
-    public copyToClipboard(): void {
-        this.logger.log('copyToClipboard');
+    public copyToClipboard(includeHeaders = false): void {
+        this.logger.log(`copyToClipboard: includeHeaders = ${includeHeaders}`);
 
         var selectedRowsToCopy = !this.selectionController.isEmpty()
             && !this.gridOptionsWrapper.isSuppressCopyRowsToClipboard();
 
         // default is copy range if exists, otherwise rows
         if (this.rangeController.isMoreThanOneCell()) {
-            this.copySelectedRangeToClipboard();
+            this.copySelectedRangeToClipboard(includeHeaders);
         } else if (selectedRowsToCopy) {
-            this.copySelectedRowsToClipboard();
+            this.copySelectedRowsToClipboard(includeHeaders);
         } else if (!this.rangeController.isEmpty()) {
-            this.copySelectedRangeToClipboard();
+            this.copySelectedRangeToClipboard(includeHeaders);
         }
     }
 
-    private forEachRangeRow(callback: Function): void {
+    private iterateFirstActiveRange(rowCallback: RowCallback, columnCallback?: ColumnCallback): void {
         if (this.rangeController.isEmpty()) { return; }
 
         var rangeSelections = this.rangeController.getCellRanges();
@@ -197,10 +211,14 @@ export class ClipboardService implements IClipboardService {
         var currentRow = startRowIsFirst ? startRow : endRow;
         var lastRow = startRowIsFirst ? endRow : startRow;
 
+        if (Utils.exists(columnCallback)) {
+            columnCallback(range.columns);
+        }
+
         while (true) {
 
             var rowNode = this.getRowNode(currentRow);
-            callback(currentRow, rowNode, range.columns);
+            rowCallback(currentRow, rowNode, range.columns);
 
             if (currentRow.equals(lastRow)) {
                 break;
@@ -210,36 +228,53 @@ export class ClipboardService implements IClipboardService {
         }
     }
 
-    public copySelectedRangeToClipboard(): void {
+    public copySelectedRangeToClipboard(includeHeaders = false): void {
         if (this.rangeController.isEmpty()) { return; }
 
         var data = '';
         var cellsToFlash = <any>{};
 
-        this.forEachRangeRow( (currentRow: GridRow, rowNode: RowNode, columns: Column[]) => {
+        // adds columns to the data
+        var columnCallback = (columns: Column[]) => {
+            if (!includeHeaders) { return; }
+
             columns.forEach( (column, index) => {
-                var value = this.valueService.getValue(column, rowNode);
-
-                value = this.processRangeCell(rowNode, column, value);
-
+                var value = this.columnController.getDisplayNameForColumn(column, true);
                 if (index != 0) {
                     data += '\t';
                 }
                 if (Utils.exists(value)) {
                     data += value;
                 }
+            });
+            data += '\r\n';
+        };
+
+        // adds cell values to the data
+        var rowCallback = (currentRow: GridRow, rowNode: RowNode, columns: Column[]) => {
+            columns.forEach( (column, index) => {
+                var value = this.valueService.getValue(column, rowNode);
+
+                let processedValue = this.processRangeCell(rowNode, column, value, this.gridOptionsWrapper.getProcessCellForClipboardFunc());
+
+                if (index != 0) {
+                    data += '\t';
+                }
+                if (Utils.exists(processedValue)) {
+                    data += processedValue;
+                }
                 var cellId = new GridCell(currentRow.rowIndex, currentRow.floating, column).createId();
                 cellsToFlash[cellId] = true;
             });
             data += '\r\n';
-        });
+        };
 
+        this.iterateFirstActiveRange(rowCallback, columnCallback);
         this.copyDataToClipboard(data);
         this.eventService.dispatchEvent(Events.EVENT_FLASH_CELLS, {cells: cellsToFlash});
     }
 
-    private processRangeCell(rowNode: RowNode, column: Column, value: any): void {
-        var func = this.gridOptionsWrapper.getProcessCellForClipboardFunc();
+    private processRangeCell(rowNode: RowNode, column: Column, value: any, func: (params: ProcessCellForExportParams) => void ): any {
         if (func) {
             return func({
                 column: column,
@@ -265,15 +300,20 @@ export class ClipboardService implements IClipboardService {
         }
     }
 
-    public copySelectedRowsToClipboard(): void {
+    public copySelectedRowsToClipboard(includeHeaders = false, columnKeys?: (string|Column|ColDef)[]): void {
 
-        var data = this.csvCreator.getDataAsCsv({
-            skipHeader: true,
+        var skipHeader = !includeHeaders;
+
+        var params: CsvExportParams = {
+            columnKeys: columnKeys,
+            skipHeader: skipHeader,
             skipFooters: true,
             columnSeparator: '\t',
             onlySelected: true,
             processCellCallback: this.gridOptionsWrapper.getProcessCellForClipboardFunc()
-        });
+        };
+
+        var data = this.csvCreator.getDataAsCsv(params);
 
         this.copyDataToClipboard(data);
     }

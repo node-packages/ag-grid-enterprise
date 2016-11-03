@@ -1,5 +1,5 @@
-// ag-grid-enterprise v5.2.0
-import { IClipboardService } from "ag-grid/main";
+// ag-grid-enterprise v6.2.1
+import { ColDef, IClipboardService, Column } from "ag-grid/main";
 export declare class ClipboardService implements IClipboardService {
     private csvCreator;
     private loggerFactory;
@@ -20,12 +20,12 @@ export declare class ClipboardService implements IClipboardService {
     pasteFromClipboard(): void;
     copyRangeDown(): void;
     private finishPasteFromClipboard(data);
-    copyToClipboard(): void;
-    private forEachRangeRow(callback);
-    copySelectedRangeToClipboard(): void;
+    copyToClipboard(includeHeaders?: boolean): void;
+    private iterateFirstActiveRange(rowCallback, columnCallback?);
+    copySelectedRangeToClipboard(includeHeaders?: boolean): void;
     private processRangeCell(rowNode, column, value);
     private getRowNode(gridRow);
-    copySelectedRowsToClipboard(): void;
+    copySelectedRowsToClipboard(includeHeaders?: boolean, columnKeys?: (string | Column | ColDef)[]): void;
     private copyDataToClipboard(data);
     private executeOnTempElement(callbackNow, callbackAfter?);
     private dataToArray(strData);

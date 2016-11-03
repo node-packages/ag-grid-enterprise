@@ -1,5 +1,6 @@
 import {
     Context,
+    DragSourceType,
     SvgFactory,
     Autowired,
     Component,
@@ -9,6 +10,7 @@ import {
     GridPanel,
     Column,
     Events,
+    TouchListener,
     QuerySelector,
     PostConstruct,
     EventService,
@@ -57,7 +59,7 @@ export class RenderedColumn extends Component {
     @PostConstruct
     public init(): void {
 
-        this.displayName = this.columnController.getDisplayNameForCol(this.column);
+        this.displayName = this.columnController.getDisplayNameForColumn(this.column);
         this.eText.innerHTML = this.displayName;
 
         this.eIndent.style.width = (this.columnDept * 10) + 'px';
@@ -80,6 +82,14 @@ export class RenderedColumn extends Component {
 
         this.addDestroyableEventListener(this.cbSelect, AgCheckbox.EVENT_CHANGED, this.onChange.bind(this));
         this.addDestroyableEventListener(this.eText, 'click', this.onClick.bind(this));
+
+        this.addTap();
+    }
+
+    private addTap(): void {
+        let touchListener = new TouchListener(this.getGui());
+        this.addDestroyableEventListener(touchListener, TouchListener.EVENT_TAP, this.onClick.bind(this));
+        this.addDestroyFunc( touchListener.destroy.bind(touchListener) );
     }
 
     private onClick(): void {
@@ -170,11 +180,13 @@ export class RenderedColumn extends Component {
 
     private addDragSource(): void {
         var dragSource: DragSource = {
+            type: DragSourceType.ToolPanel,
             eElement: this.getGui(),
             dragItemName: this.displayName,
             dragItem: [this.column]
         };
-        this.dragAndDropService.addDragSource(dragSource);
+        this.dragAndDropService.addDragSource(dragSource, true);
+        this.addDestroyFunc( ()=> this.dragAndDropService.removeDragSource(dragSource) );
     }
 
     private onColumnStateChanged(): void {
